@@ -3,7 +3,7 @@ from django.db import models
 import random, string
 
 def generate_code():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    return ''.join(random.choices(string.digits, k=6))
 
 class Playlist(models.Model):
     code = models.CharField(max_length=6, unique=True, default=generate_code)

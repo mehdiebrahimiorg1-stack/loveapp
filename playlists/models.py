@@ -20,7 +20,7 @@ class Photo(models.Model):
 
 class Song(models.Model):
     playlist = models.ForeignKey(Playlist, related_name='songs', on_delete=models.CASCADE)
-    title = models.CharField(max_length=100)
+    title = models.CharField(max_length=100 , blank=True)
     file = models.FileField(upload_to='songs/', blank=True, null=True)
 
 

@@ -49,5 +49,5 @@ def add_song(request, code):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Playlist.DoesNotExist:
         return Response({'error': 'کد اشتباهه!'}, status=status.HTTP_404_NOT_FOUND)
-
-
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -25,7 +25,10 @@ def get_playlist(request, code):
 def add_photo(request, code):
     try:
         playlist = Playlist.objects.get(code=code)
-        serializer = PhotoSerializer(data=request.data)
+        # playlist رو از URL میگیریم، از request نمیگیریم
+        data = request.data.copy()
+        data['playlist'] = playlist.id
+        serializer = PhotoSerializer(data=data)
         if serializer.is_valid():
             serializer.save(playlist=playlist)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -37,11 +40,14 @@ def add_photo(request, code):
 def add_song(request, code):
     try:
         playlist = Playlist.objects.get(code=code)
-        serializer = SongSerializer(data=request.data)
+        data = request.data.copy()
+        data['playlist'] = playlist.id
+        serializer = SongSerializer(data=data)
         if serializer.is_valid():
             serializer.save(playlist=playlist)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Playlist.DoesNotExist:
         return Response({'error': 'کد اشتباهه!'}, status=status.HTTP_404_NOT_FOUND)
-# Create your views here.
+
+

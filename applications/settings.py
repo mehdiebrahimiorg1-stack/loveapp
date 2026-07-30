@@ -32,6 +32,8 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+    'cloudinary'
+    'cloudinary_storage'
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -56,6 +58,14 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True # بعداً محدود می‌کنیم
+
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.environ.get('d673byza'),
+    'API_KEY': os.environ.get('186286644479387'),
+    'API_SECRET': os.environ.get('T4NhvEv-VRMQZanpmLP-oZVKf58'),
+}
+
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR , 'media')

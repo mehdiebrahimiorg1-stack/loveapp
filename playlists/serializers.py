@@ -4,14 +4,12 @@ from .models import Playlist, Photo, Song
 class PhotoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Photo
-        fields = 'all'
+        fields = ['id', 'playlist', 'image', 'caption']
 
 class SongSerializer(serializers.ModelSerializer):
     class Meta:
         model = Song
-        fields = 'all'
-
-
+        fields = ['id', 'playlist', 'title', 'file']
 
 class PlaylistSerializer(serializers.ModelSerializer):
     photos = PhotoSerializer(many=True, read_only=True)
@@ -19,4 +17,4 @@ class PlaylistSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Playlist
-        fields = 'all'
+        fields = ['id', 'code', 'title', 'dialog', 'photos', 'songs']

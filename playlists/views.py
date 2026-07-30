@@ -1,9 +1,8 @@
-from django.shortcuts import render
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Playlist, Message
-from .serializers import PlaylistSerializer, MessageSerializer
+from .models import Playlist, Photo, Song
+from .serializers import PlaylistSerializer, PhotoSerializer, SongSerializer
 
 @api_view(['POST'])
 def create_playlist(request):
@@ -23,10 +22,22 @@ def get_playlist(request, code):
         return Response({'error': 'کد اشتباهه!'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['POST'])
-def add_message(request, code):
+def add_photo(request, code):
     try:
         playlist = Playlist.objects.get(code=code)
-        serializer = MessageSerializer(data=request.data)
+        serializer = PhotoSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(playlist=playlist)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Playlist.DoesNotExist:
+        return Response({'error': 'کد اشتباهه!'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+def add_song(request, code):
+    try:
+        playlist = Playlist.objects.get(code=code)
+        serializer = SongSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(playlist=playlist)
             return Response(serializer.data, status=status.HTTP_201_CREATED)

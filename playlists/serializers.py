@@ -1,14 +1,20 @@
 from rest_framework import serializers
-from .models import Playlist, Message
+from .models import Playlist, Photo, Song
 
-class MessageSerializer(serializers.ModelSerializer):
+class PhotoSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Message
-        fields = '__all__'
+        model = Photo
+        fields = 'all'
+
+class SongSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Song
+        fields = 'all'
 
 class PlaylistSerializer(serializers.ModelSerializer):
-    messages = MessageSerializer(many=True, read_only=True)
+    photos = PhotoSerializer(many=True, read_only=True)
+    songs = SongSerializer(many=True, read_only=True)
     
     class Meta:
         model = Playlist
-        fields = '__all__'
+        fields = 'all'

@@ -11,6 +11,8 @@ class SongSerializer(serializers.ModelSerializer):
         model = Song
         fields = 'all'
 
+
+
 class PlaylistSerializer(serializers.ModelSerializer):
     photos = PhotoSerializer(many=True, read_only=True)
     songs = SongSerializer(many=True, read_only=True)

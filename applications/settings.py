@@ -58,7 +58,7 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = True # بعداً محدود می‌کنیم
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.path.join(BASE_DIR , 'media')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

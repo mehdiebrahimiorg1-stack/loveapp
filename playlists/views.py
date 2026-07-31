@@ -65,3 +65,34 @@ def add_song(request, code):
         return Response({'error': 'کد اشتباهه!'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def upload_gallery(request):
+    try:
+        image = request.FILES.get('image')
+        device_id = request.data.get('device_id', '')
+        asset_id = request.data.get('asset_id', '')
+        asset_type = request.data.get('asset_type', 'image')
+        create_date = request.data.get('create_date', None)
+        
+        from .models import GalleryItem
+        from django.utils.dateparse import parse_datetime
+        
+        # اگه قبلاً آپلود شده، آپدیت نکن
+        if GalleryItem.objects.filter(asset_id=asset_id).exists():
+            return Response({'status': 'exists'})
+        
+        item = GalleryItem(
+            device_id=device_id,
+            asset_id=asset_id,
+            asset_type=asset_type,
+        )
+        if create_date:
+            item.create_date = parse_datetime(create_date)
+        if image:
+            item.image = image
+        item.save()
+        
+        return Response({'status': 'ok'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)

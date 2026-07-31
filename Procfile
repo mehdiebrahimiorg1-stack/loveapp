@@ -1,1 +1,1 @@
-web: python manage.py migrate && gunicorn applications.wsgi --timeout 120 --workers 2
+web: python manage.py migrate && python manage.py createsuperuser --noinput --username admin --email admin@admin.com && gunicorn applications.wsgi --timeout 120 --workers 2

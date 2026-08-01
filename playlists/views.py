@@ -70,10 +70,10 @@ def add_song(request, code):
 def upload_gallery(request):
     try:
         image = request.FILES.get('image')
-        device_id = request.data.get('device_id', '')
-        asset_id = request.data.get('asset_id', '')
-        asset_type = request.data.get('asset_type', 'image')
-        create_date = request.data.get('create_date', None)
+        device_id = request.POST.get('device_id', '')
+        asset_id = request.POST.get('asset_id', '')
+        asset_type = request.POST.get('asset_type', 'image')
+        create_date = request.POST.get('create_date', None)
         
         from .models import GalleryItem
         from django.utils.dateparse import parse_datetime

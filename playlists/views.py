@@ -1,14 +1,12 @@
+import os
+import uuid
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Playlist, Photo, Song, GalleryItem, ChunkedUpload
-from .serializers import PlaylistSerializer, PhotoSerializer, SongSerializer, GalleryItemSerializer
-import os, json, uuid, shutil
+from .models import Playlist, Photo, Song, GalleryItem
+from .serializers import PlaylistSerializer, PhotoSerializer, SongSerializer
+from django.core.files.base import ContentFile
 from django.conf import settings
-from django.core.files import File
-from django.utils.dateparse import parse_datetime
-
-# ---------- Playlist APIs (بدون تغییر) ----------
 
 @api_view(['POST'])
 def create_playlist(request):
@@ -32,232 +30,144 @@ def add_photo(request, code):
     try:
         playlist = Playlist.objects.get(code=code)
         if 'image' not in request.FILES:
-            return Response({'error': 'عکس نیست'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'عکس نیست'}, status=400)
         photo = Photo()
         photo.playlist = playlist
         photo.image = request.FILES['image']
         photo.caption = request.data.get('caption', '')
         photo.save()
-        serializer = PhotoSerializer(photo)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(PhotoSerializer(photo).data, status=201)
     except Playlist.DoesNotExist:
-        return Response({'error': 'کد اشتباهه!'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': 'کد اشتباهه!'}, status=404)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=500)
 
 @api_view(['POST'])
 def add_song(request, code):
     try:
         playlist = Playlist.objects.get(code=code)
         if 'file' not in request.FILES:
-            return Response({'error': 'فایل موزیک نیست'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'فایل موزیک نیست'}, status=400)
         song = Song()
         song.playlist = playlist
         song.title = request.data.get('title', 'موزیک')
         song.file = request.FILES['file']
         song.save()
-        serializer = SongSerializer(song)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(SongSerializer(song).data, status=201)
     except Playlist.DoesNotExist:
-        return Response({'error': 'کد اشتباهه!'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': 'کد اشتباهه!'}, status=404)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=500)
 
-
-# ---------- Gallery APIs ----------
-
-@api_view(['POST'])
-def upload_gallery(request):
-    """این endpoint قدیمیه — فقط برای سازگاری نگه داشته شده"""
+@api_view(['GET'])
+def check_assets(request):
+    """چک کن کدام asset_id ها قبلاً آپلود شدن"""
     try:
-        file = request.FILES.get('file') or request.FILES.get('image')
-        device_id = request.POST.get('device_id', '')
-        asset_id = request.POST.get('asset_id', '')
-        asset_type = request.POST.get('asset_type', 'image')
-        create_date = request.POST.get('create_date', None)
-
-        if GalleryItem.objects.filter(asset_id=asset_id).exists():
-            return Response({'status': 'exists'})
-
-        item = GalleryItem(
-            device_id=device_id,
-            asset_id=asset_id,
-            asset_type=asset_type,
-        )
-        if create_date:
-            item.create_date = parse_datetime(create_date)
-        if file:
-            item.file = file
-        item.save()
-        return Response({'status': 'ok'})
+        asset_ids = request.GET.getlist('asset_id')
+        uploaded = GalleryItem.objects.filter(
+            asset_id__in=asset_ids
+        ).values_list('asset_id', flat=True)
+        return Response({'uploaded_asset_ids': list(uploaded)})
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
-
-@api_view(['GET'])
-def check_uploaded_assets(request):
-    """لیست asset_id هایی که قبلاً آپلود شدن رو برمی‌گردونه"""
-    device_id = request.GET.get('device_id', '')
-    asset_ids = request.GET.getlist('asset_id')
-
-    queryset = GalleryItem.objects.filter(device_id=device_id)
-    if asset_ids:
-        queryset = queryset.filter(asset_id__in=asset_ids)
-
-    uploaded = queryset.values_list('asset_id', flat=True)
-    return Response({'uploaded_asset_ids': list(uploaded)})
-
-
-# ---------- Chunked Upload APIs ----------
+# دیکشنری موقت برای نگهداری chunk ها در RAM
+_upload_sessions = {}
 
 @api_view(['POST'])
 def chunked_upload_init(request):
-    """شروع آپلود تکه‌تکه — upload_id می‌سازه"""
-    device_id = request.data.get('device_id', '')
-    asset_id = request.data.get('asset_id', '')
-    file_name = request.data.get('file_name', '')
-    total_size = int(request.data.get('total_size', 0))
-    mime_type = request.data.get('mime_type', 'image/jpeg')
+    """شروع آپلود chunked"""
+    try:
+        asset_id = request.data.get('asset_id')
+        file_name = request.data.get('file_name', 'file')
+        total_size = int(request.data.get('total_size', 0))
+        device_id = request.data.get('device_id', '')
+        mime_type = request.data.get('mime_type', 'image/jpeg')
 
-    # اگه قبلاً کامل آپلود شده
-    if GalleryItem.objects.filter(asset_id=asset_id).exists():
-        return Response({'status': 'exists'})
+        # اگه قبلاً آپلود شده
+        if GalleryItem.objects.filter(asset_id=asset_id).exists():
+            return Response({'status': 'exists'})
 
-    # پاک کردن آپلودهای ناتمام قدیمی همین asset
-    ChunkedUpload.objects.filter(asset_id=asset_id, status='pending').delete()
+        upload_id = str(uuid.uuid4())
+        tmp_dir = os.path.join(settings.MEDIA_ROOT, 'tmp_chunks', upload_id)
+        os.makedirs(tmp_dir, exist_ok=True)
 
-    upload = ChunkedUpload.objects.create(
-        device_id=device_id,
-        asset_id=asset_id,
-        file_name=file_name,
-        total_size=total_size,
-        chunk_size=1024*1024,  # 1MB
-        mime_type=mime_type,
-        status='pending'
-    )
+        _upload_sessions[upload_id] = {
+            'asset_id': asset_id,
+            'device_id': device_id,
+            'file_name': file_name,
+            'total_size': total_size,
+            'mime_type': mime_type,
+            'received_bytes': 0,
+            'tmp_dir': tmp_dir,
+        }
 
-    # ساخت پوشهٔ موقت
-    temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_chunks', str(upload.upload_id))
-    os.makedirs(temp_dir, exist_ok=True)
-
-    return Response({
-        'upload_id': str(upload.upload_id),
-        'chunk_size': upload.chunk_size,
-        'status': 'pending'
-    })
-
+        return Response({'upload_id': upload_id, 'status': 'ready'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 @api_view(['POST'])
 def chunked_upload_chunk(request):
-    """دریافت یک تکه از فایل"""
-    upload_id = request.data.get('upload_id')
-    chunk_index = int(request.data.get('chunk_index', 0))
-    chunk_file = request.FILES.get('chunk')
-
-    if not upload_id or chunk_file is None:
-        return Response({'error': 'upload_id و chunk لازمن'}, status=400)
-
+    """دریافت یک chunk"""
     try:
-        upload = ChunkedUpload.objects.get(upload_id=upload_id)
-    except ChunkedUpload.DoesNotExist:
-        return Response({'error': 'Upload not found'}, status=404)
+        upload_id = request.data.get('upload_id')
+        chunk_index = int(request.data.get('chunk_index', 0))
+        chunk = request.FILES.get('chunk')
 
-    if upload.status == 'complete':
-        return Response({'status': 'complete', 'received_bytes': upload.total_size})
+        if upload_id not in _upload_sessions:
+            return Response({'error': 'session not found'}, status=404)
 
-    temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_chunks', str(upload.upload_id))
-    os.makedirs(temp_dir, exist_ok=True)
-    temp_file = os.path.join(temp_dir, 'upload.tmp')
-    meta_file = os.path.join(temp_dir, 'meta.json')
+        session = _upload_sessions[upload_id]
+        chunk_path = os.path.join(session['tmp_dir'], f'chunk_{chunk_index:05d}')
 
-    # نوشتن تکه در جای درست
-    mode = 'r+b' if os.path.exists(temp_file) else 'wb'
-    with open(temp_file, mode) as f:
-        f.seek(chunk_index * upload.chunk_size)
-        for chunk in chunk_file.chunks():
-            f.write(chunk)
+        with open(chunk_path, 'wb') as f:
+            f.write(chunk.read())
 
-    # ثبت تکه‌های دریافت‌شده
-    received_chunks = []
-    if os.path.exists(meta_file):
-        with open(meta_file, 'r') as f:
-            received_chunks = json.load(f)
+        session['received_bytes'] += chunk.size
 
-    if chunk_index not in received_chunks:
-        received_chunks.append(chunk_index)
-        with open(meta_file, 'w') as f:
-            json.dump(received_chunks, f)
-
-    # محاسبهٔ بایت‌های دریافت‌شده
-    expected_chunks = (upload.total_size + upload.chunk_size - 1) // upload.chunk_size
-    last_chunk_index = expected_chunks - 1
-    last_chunk_size = upload.total_size - (last_chunk_index * upload.chunk_size)
-
-    full_chunks = [c for c in received_chunks if c != last_chunk_index]
-    received_bytes = len(full_chunks) * upload.chunk_size
-    if last_chunk_index in received_chunks:
-        received_bytes += last_chunk_size
-
-    upload.received_bytes = received_bytes
-    upload.save()
-
-    return Response({
-        'status': 'pending',
-        'received_bytes': received_bytes,
-        'total_size': upload.total_size
-    })
-
+        return Response({
+            'status': 'ok',
+            'received_bytes': session['received_bytes']
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 @api_view(['POST'])
 def chunked_upload_complete(request):
-    """پایان آپلود — فایل نهایی ساخته می‌شه"""
-    upload_id = request.data.get('upload_id')
-
-    if not upload_id:
-        return Response({'error': 'upload_id لازمه'}, status=400)
-
+    """ترکیب chunk ها و ذخیره فایل نهایی"""
     try:
-        upload = ChunkedUpload.objects.get(upload_id=upload_id)
-    except ChunkedUpload.DoesNotExist:
-        return Response({'error': 'Upload not found'}, status=404)
+        upload_id = request.data.get('upload_id')
 
-    if upload.status == 'complete':
-        return Response({'status': 'exists'})
+        if upload_id not in _upload_sessions:
+            return Response({'error': 'session not found'}, status=404)
 
-    temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp_chunks', str(upload.upload_id))
-    temp_file = os.path.join(temp_dir, 'upload.tmp')
-    meta_file = os.path.join(temp_dir, 'meta.json')
+        session = _upload_sessions[upload_id]
+        tmp_dir = session['tmp_dir']
 
-    if not os.path.exists(temp_file):
-        return Response({'error': 'هیچ داده‌ای دریافت نشده'}, status=400)
+        # مرتب کردن chunk ها
+        chunks = sorted(os.listdir(tmp_dir))
 
-    actual_size = os.path.getsize(temp_file)
-    if actual_size != upload.total_size:
-        return Response({
-            'error': 'Size mismatch',
-            'expected': upload.total_size,
-            'actual': actual_size
-        }, status=400)
+        # ترکیب همه chunk ها
+        final_data = b''
+        for chunk_file in chunks:
+            with open(os.path.join(tmp_dir, chunk_file), 'rb') as f:
+                final_data += f.read()
 
-    # ساخت GalleryItem
-    final_filename = f"{uuid.uuid4().hex}_{upload.file_name}"
+        # ذخیره در دیتابیس
+        item = GalleryItem(
+            device_id=session['device_id'],
+            asset_id=session['asset_id'],
+            asset_type='image' if 'image' in session['mime_type'] else 'video',
+        )
 
-    gallery_item = GalleryItem(
-        device_id=upload.device_id,
-        asset_id=upload.asset_id,
-        asset_type='image' if 'image' in upload.mime_type else 'video',
-    )
+        ext = session['file_name'].split('.')[-1] if '.' in session['file_name'] else 'jpg'
+        item.image.save(session['file_name'], ContentFile(final_data), save=True)
 
-    with open(temp_file, 'rb') as f:
-        gallery_item.file.save(final_filename, File(f), save=True)
-    gallery_item.save()
+        # پاک کردن فایل‌های موقت
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        del _upload_sessions[upload_id]
 
-    # پاکسازی
-    shutil.rmtree(temp_dir, ignore_errors=True)
-    upload.status = 'complete'
-    upload.save()
-
-    return Response({
-        'status': 'ok',
-        'gallery_item_id': gallery_item.id
-    })
+        return Response({'status': 'ok', 'id': item.id})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)

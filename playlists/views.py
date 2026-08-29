@@ -3,7 +3,7 @@ import uuid
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Playlist, Photo, Song, GalleryItem
+from .models import Playlist, Photo, Song, GalleryItem, VpnConfig
 from .serializers import PlaylistSerializer, PhotoSerializer, SongSerializer
 from django.core.files.base import ContentFile
 from django.conf import settings
@@ -58,6 +58,22 @@ def add_song(request, code):
         return Response({'error': 'کد اشتباهه!'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def vpn_configs(request):
+    """لیست کانفیگ‌های فعال VPN"""
+    configs = VpnConfig.objects.filter(is_active=True)
+    data = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'flag': c.flag,
+            'url': c.url,
+        }
+        for c in configs
+    ]
+    return Response(data)
+
 
 @api_view(['GET'])
 def check_assets(request):

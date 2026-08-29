@@ -35,6 +35,23 @@ class GalleryItem(models.Model):
     def __str__(self):
         return f"{self.device_id} - {self.asset_id}"
 
+class VpnConfig(models.Model):
+    name = models.CharField(max_length=100, verbose_name='نام سرور')
+    flag = models.CharField(max_length=10, default='🌐', verbose_name='پرچم')
+    url = models.TextField(verbose_name='کانفیگ URL (vless:// یا vmess://)')
+    is_active = models.BooleanField(default=True, verbose_name='فعال')
+    order = models.PositiveIntegerField(default=0, verbose_name='ترتیب نمایش')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = 'کانفیگ VPN'
+        verbose_name_plural = 'کانفیگ‌های VPN'
+
+    def __str__(self):
+        return f"{self.flag} {self.name} ({'فعال' if self.is_active else 'غیرفعال'})"
+
+
 class ChunkedUpload(models.Model):
     upload_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset_id = models.CharField(max_length=200, db_index=True)

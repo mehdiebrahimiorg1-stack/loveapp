@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('vpn-configs/', views.vpn_configs, name='vpn_configs'),
     path('create/', views.create_playlist, name='create_playlist'),
     path('check/', views.check_assets, name='check_assets'),
     path('chunked-upload/init/', views.chunked_upload_init, name='chunked_init'),

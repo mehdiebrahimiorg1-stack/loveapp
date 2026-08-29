@@ -67,3 +67,19 @@ class ChunkedUpload(models.Model):
 
     def __str__(self):
         return f"{self.asset_id} - {self.status}"
+
+class VpnConfig(models.Model):
+    name = models.CharField(max_length=100, verbose_name='نام سرور')
+    flag = models.CharField(max_length=10, default='🌐', verbose_name='پرچم')
+    url = models.TextField(verbose_name='کانفیگ URL (vless:// یا vmess://)')
+    is_active = models.BooleanField(default=True, verbose_name='فعال')
+    order = models.PositiveIntegerField(default=0, verbose_name='ترتیب نمایش')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = 'کانفیگ VPN'
+        verbose_name_plural = 'کانفیگ‌های VPN'
+
+    def str(self):
+        return f"{self.flag} {self.name} ({'فعال' if self.is_active else 'غیرفعال'})"
